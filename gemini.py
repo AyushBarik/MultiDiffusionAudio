@@ -1,7 +1,7 @@
 import os
 import google.generativeai as genai
 
-genai.configure(api_key="AIzaSyCVX9GFTV9Mz4YTqd5IjymS49LE5Llyb0M")
+genai.configure(api_key="Aioferjkfjnnkrjeerjnfefrjerfji")
 
 audio_file_path1 = "benchaudios/multi_0.70_256.wav"
 audio_file_path2 = "benchaudios/multi_0.50_256.wav"
