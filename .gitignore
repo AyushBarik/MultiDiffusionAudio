@@ -1,0 +1,96 @@
+# Audio files
+*.wav
+*.mp3
+*.flac
+*.aac
+*.ogg
+*.m4a
+
+# Virtual environments
+benchenv/
+ldmenv/
+venv/
+env/
+.env/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Model checkpoints and weights
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+ckpt/
+
+# Output directories
+output/
+val_gens/
+artifacts/val/
+
+# Audio datasets
+AudioSet/downloaded_audio/
+**/downloaded_audio/
+
+# Results and scores
+*.csv
+tuning_results.json
+tuning_detailed_results.csv
+tuning_config_summary.csv
+pam_scores.csv
+clap_scores_laion_music_speech.csv
+aesthetics_scores.csv
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large data files
+splits.json
+artifacts/splits.json
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+.tmp/

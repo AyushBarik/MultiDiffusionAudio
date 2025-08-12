@@ -1,0 +1,27 @@
+---
+alwaysApply: false
+---
+
+please provide short responses. Focus on explaning issues not merely solving them. Don't run away from issues and try to find alternatives.
+
+## Notebook Tool Requirements (CRITICAL)
+- **Available Notebook Tools (use ALL as needed):**
+  - `edit_notebook` - Edit existing notebook cells ONLY (no cell creation/deletion)
+  - `read_file` - Read notebook content (shows cell structure and code)
+  - `file_search` - Find notebook files by name pattern
+  - `list_dir` - List directories containing notebooks
+- **NEVER use edit_file for .ipynb files** - will corrupt notebooks
+- **ALWAYS use edit_notebook for any notebook modifications**
+- **NEVER add new cells** - only edit existing cell content
+- **NEVER delete files** - only suggest deletion to user if absolutely necessary
+- When working on notebooks (.ipynb), immediately use appropriate notebook tools or HALT
+- Regular Python files (.py) → edit_file | Notebooks (.ipynb) → edit_notebook | NO EXCEPTIONS
+
+## Tool Usage Preferences  
+- NEVER use grep_search - use read_file, file_search, or codebase_search instead
+- If a tool fails (like read_file timeout), retry the SAME tool - don't use workarounds
+- Always use parallel tool calls when gathering multiple pieces of information
+
+## Environment & Package Management
+- ALWAYS use `uv` for ALL package management operations - never conda/pip
+- Check if environment is activated first, activate `ldmenv` if needed using source activate

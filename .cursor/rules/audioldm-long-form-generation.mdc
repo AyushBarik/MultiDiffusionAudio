@@ -1,0 +1,118 @@
+---
+description: AudioLDM long-form audio generation implementation plan using MultiDiffusion and Tiled VAE
+globs: AudioLDM/**/*
+alwaysApply: true
+---
+
+# AudioLDM Long-Form Audio Generation Plan
+
+## Implementation Phases
+
+### Phase 1: 3-Minute Audio Target (Current Focus)
+- **Diffusion Model**: Implement MultiDiffusion for UNet
+- **VAE Decoder**: Implement Tiled VAE for decoder
+- **Vocoder**: Skip for now (HiFiGAN can handle ~4 minutes)
+
+### Phase 2: Full Pipeline (Future)
+- **Vocoder**: Implement chunked processing for HiFiGAN
+- **Integration**: End-to-end long-form generation
+
+## Technical Bottlenecks Identified
+
+### 1. Diffusion Model Bottleneck
+- **Problem**: Cannot handle 15,360 time steps for 10-minute audio
+- **Root Cause**: Quadratic scaling in attention mechanisms
+- **Solution**: MultiDiffusion - process chunks during each denoising step
+
+### 2. VAE Decoder Bottleneck  
+- **Problem**: Memory explosion with large feature maps
+- **Root Cause**: Large tensor sizes in decoder operations
+- **Solution**: Tiled VAE - decompose operations with overlapping tiles
+
+### 3. Vocoder Bottleneck (Phase 2)
+- **Problem**: HiFiGAN cannot handle very long spectrograms
+- **Limit**: ~4 minutes maximum
+- **Solution**: Chunked processing with overlap
+
+## MultiDiffusion Implementation
+
+### Core Concept
+- Process single long latent by denoising chunks during each diffusion step
+- Maintain global coherence across chunk boundaries
+- Handle overlapping regions properly
+
+### Key Implementation Points
+```python
+# Process chunks during each denoising step
+for timestep in timesteps:
+    for chunk in chunks:
+        # Denoise chunk with overlap handling
+        denoised_chunk = model(chunk, timestep)
+        # Merge with neighboring chunks
+        merge_overlapping_regions(denoised_chunk)
+```
+
+## Tiled VAE Implementation
+
+### Core Concept
+- Decompose VAE operations into overlapping tiles
+- Share GroupNorm statistics across tiles
+- Seamless merging of processed tiles
+
+### Key Implementation Points
+```python
+# Tiled VAE decoder processing
+def tiled_vae_decode(latent, tile_size, overlap):
+    tiles = create_overlapping_tiles(latent, tile_size, overlap)
+    
+    for tile in tiles:
+        # Process tile with shared statistics
+        decoded_tile = vae.decode(tile)
+        # Merge with proper overlap handling
+        merge_tile_with_overlap(decoded_tile)
+```
+
+## AudioLDM 20-Second Limit Context
+
+### Root Cause (lines 170-172 in AudioLDM/audioldm/pipeline.py)
+- Training distribution mismatch
+- Model never trained on sequences longer than 10-20 seconds
+- Results in NaN outputs due to:
+  - Attention numerical instability
+  - Batch normalization breakdown
+  - Gradient flow issues
+
+### Why MultiDiffusion + Tiled VAE Solves This
+- **MultiDiffusion**: Keeps individual chunks within trained distribution
+- **Tiled VAE**: Prevents memory explosion while maintaining quality
+- **Global Coherence**: Overlap and merging strategies maintain consistency
+
+## Implementation Priority Order
+
+1. **MultiDiffusion for Diffusion UNet** (Highest Priority)
+   - Focus on chunk processing during denoising steps
+   - Implement proper overlap handling
+   - Test with 3-minute audio targets
+
+2. **Tiled VAE for VAE Decoder** (High Priority)
+   - Implement tile decomposition
+   - Share GroupNorm statistics
+   - Ensure seamless merging
+
+3. **Vocoder Chunking** (Future Phase)
+   - Implement after achieving 3-minute generation
+   - Focus on HiFiGAN chunking strategies
+
+## Success Metrics
+
+- **Phase 1 Success**: Generate coherent 3-minute audio without NaN outputs
+- **Memory Usage**: Stay within reasonable VRAM limits
+- **Audio Quality**: Maintain quality comparable to shorter generations
+- **Coherence**: Smooth transitions across chunk boundaries
+
+## Files to Focus On
+
+- `AudioLDM/audioldm/pipeline.py` - Main inference pipeline
+- `AudioLDM/audioldm/latent_diffusion/` - Diffusion model components
+- `AudioLDM/audioldm/variational_autoencoder/` - VAE components
+- Look for attention mechanisms and VAE decoder implementations
