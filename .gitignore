@@ -12,6 +12,7 @@ ldmenv/
 venv/
 env/
 .env/
+.env
 
 # Python cache and compiled files
 __pycache__/

@@ -75,7 +75,7 @@ Step-by-step
     --overlap-percents 0.25 0.5 0.75 \
     --chunk-frames 64 128 256 \
     --ddim-steps 200 \
-    --out-root artifacts/val/novel
+    --out-root artifacts/val/novel > gen_tuning.log 2>&1
 - What it does:
   - For every (overlap_percent, chunk_frames) pair, generates WAVs for all val_ids.
   - Uses individual sample durations from data.json for fair comparison.

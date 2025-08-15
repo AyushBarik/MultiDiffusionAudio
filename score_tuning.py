@@ -90,14 +90,26 @@ def preprocess_audio_for_panns(audio, target_sr=32000, chunk_duration=10.0):
     return chunks
 
 def resample_reference_audio(ref_path, target_sr=16000):
-    """Resample reference audio to 16kHz to match AudioLDM output"""
-    ref_audio, orig_sr = torchaudio.load(ref_path)
-    
-    if orig_sr != target_sr:
-        resampler = T.Resample(orig_freq=orig_sr, new_freq=target_sr)
-        ref_audio = resampler(ref_audio)
-    
-    return ref_audio.squeeze().numpy()
+    """Load and resample reference audio to match generated audio sample rate"""
+    try:
+        ref_audio, orig_sr = torchaudio.load(ref_path)
+        if orig_sr != target_sr:
+            ref_audio = torchaudio.functional.resample(ref_audio, orig_sr, target_sr)
+        
+        # Handle different audio shapes robustly
+        if ref_audio.dim() > 1:
+            ref_audio = ref_audio.mean(dim=0)  # Convert stereo to mono by averaging
+        ref_audio = ref_audio.squeeze().numpy()
+        # Ensure we have a 1D array
+        if ref_audio.ndim == 0:
+            ref_audio = np.array([ref_audio])
+        elif ref_audio.ndim > 1:
+            ref_audio = ref_audio.flatten()
+            
+        return ref_audio
+    except Exception as e:
+        print(f"        ⚠️  Error loading reference audio {ref_path}: {e}")
+        return None
 
 def compute_gemini_score(ref_audio_path, gen_audio_path, prompt, api_key):
     """Compute Gemini evaluation score using your exact setup"""
@@ -299,14 +311,27 @@ def evaluate_config(config_dir, config_info, val_samples, models, gemini_api_key
             # Load and resample reference audio to 16kHz to match generated
             if os.path.exists(ref_audio_path):
                 ref_audio = resample_reference_audio(ref_audio_path, target_sr=16000)
-                ref_chunks = preprocess_audio_for_panns(ref_audio)
-                ref_emb, ref_prob = extract_panns_features(panns_model, ref_chunks)
-                ref_embeddings.append(ref_emb)
-                ref_probabilities.append(ref_prob)
+                if ref_audio is not None:
+                    ref_chunks = preprocess_audio_for_panns(ref_audio)
+                    ref_emb, ref_prob = extract_panns_features(panns_model, ref_chunks)
+                    ref_embeddings.append(ref_emb)
+                    ref_probabilities.append(ref_prob)
+                else:
+                    print(f"        ⚠️  Skipping reference audio processing for sample {sample_id}")
+            else:
+                print(f"        ⚠️  Reference audio not found: {ref_audio_path}")
             
             # Load generated audio (already 16kHz from AudioLDM)
             gen_audio, _ = torchaudio.load(gen_audio_path)
+            # Handle different audio shapes robustly
+            if gen_audio.dim() > 1:
+                gen_audio = gen_audio.mean(dim=0)  # Convert stereo to mono by averaging
             gen_audio = gen_audio.squeeze().numpy()
+            # Ensure we have a 1D array
+            if gen_audio.ndim == 0:
+                gen_audio = np.array([gen_audio])
+            elif gen_audio.ndim > 1:
+                gen_audio = gen_audio.flatten()
             gen_chunks = preprocess_audio_for_panns(gen_audio)
             gen_emb, gen_prob = extract_panns_features(panns_model, gen_chunks)
             gen_embeddings.append(gen_emb)
@@ -411,6 +436,11 @@ def main():
             if os.path.exists(config_json_path):
                 with open(config_json_path, 'r') as f:
                     config_info = json.load(f)
+                # Ensure compatibility - add 'id' field if missing
+                if 'id' not in config_info and 'config_id' in config_info:
+                    config_info['id'] = config_info['config_id']
+                elif 'id' not in config_info:
+                    config_info['id'] = config_id
             else:
                 # Fallback for old format
                 config_info = {
