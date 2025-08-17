@@ -19,12 +19,12 @@ def main():
     
     # Initialize evaluator with PASST backbone
     print("🔧 Initializing EvaluationHelper with PASST backbone...")
-    evaluator = EvaluationHelper(16000, device, backbone="passt")
+    evaluator = EvaluationHelper(32000, device, backbone="passt", recalculate=True)
     print("✅ EvaluationHelper (PASST) initialized successfully!")
     
     # Define paths
     ref_dir = "chunked_ref"
-    gen_dir = "chunked_gen"
+    gen_dir = "artifacts/val/novel/config_8"
     
     print(f"\n📁 Reference audio directory: {ref_dir}")
     print(f"📁 Generated audio directory: {gen_dir}")
