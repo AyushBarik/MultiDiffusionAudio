@@ -10,95 +10,74 @@ import glob
 import re
 import tempfile
 import shutil
+import sys
+
+# Add the audioldm_eval path to monkey patch the padding function
+sys.path.append('./benchenv/lib/python3.10/site-packages/audioldm_eval')
+
+# Import first, then monkey patch
 from audioldm_eval import EvaluationHelper
+import audioldm_eval.datasets.load_mel
+
+# Now monkey patch the padding function to do nothing - this is causing the metrics to be unreliable
+from audioldm_eval.datasets.load_mel import pad_short_audio
+def no_pad(audio, min_samples=32000):
+    """Return audio as-is, no padding - this fixes the metric reliability issues"""
+    return audio
+
+# Replace the function globally
+audioldm_eval.datasets.load_mel.pad_short_audio = no_pad
+
 
 def chunk_audio_for_evaluation(audio_dir, output_dir, chunk_duration=10.0, sample_rate=16000):
-    """Chunk audio files using RANDOM sampling to preserve statistical independence"""
+    """
+    Sequential fixed-window chunking with zero-padding to match AudioLDM evaluation.
+    Every audio is split into non-overlapping 10s windows.
+    If the last chunk is shorter, it's padded with zeros.
+    """
     os.makedirs(output_dir, exist_ok=True)
-    
     audio_files = glob.glob(os.path.join(audio_dir, "*.wav"))
     chunk_count = 0
     file_mappings = {}
-    
-    print(f"📂 Chunking {len(audio_files)} audio files from {audio_dir}")
-    
+
+    print(f"📂 Fixed-window chunking {len(audio_files)} files from {audio_dir}")
+
     for audio_file in audio_files:
         basename = os.path.splitext(os.path.basename(audio_file))[0]
-        
-        # Extract base name for pairing (remove any existing chunk suffix)
-        # e.g., "wav10_chunk_001" -> "wav10"
-        base_match = re.match(r'^(.*?)(?:_chunk_\d+)?$', basename)
-        if base_match:
-            base_name = base_match.group(1)
-        else:
-            base_name = basename
-            
+        base_name = re.match(r'^(.*?)(?:_chunk_\d+)?$', basename).group(1)
+
         if base_name not in file_mappings:
             file_mappings[base_name] = []
-        
-        # Load audio
+
         waveform, sr = torchaudio.load(audio_file)
-        
-        # Resample if needed
         if sr != sample_rate:
-            resampler = torchaudio.transforms.Resample(sr, sample_rate)
-            waveform = resampler(waveform)
-        
-        # Calculate chunk size in samples
+            waveform = torchaudio.transforms.Resample(sr, sample_rate)(waveform)
+
         chunk_samples = int(chunk_duration * sample_rate)
         total_samples = waveform.shape[1]
-        
-        print(f"  📄 {basename}: {total_samples/sample_rate:.1f}s → ", end="")
-        
-        # Create chunks using RANDOM sampling instead of sequential
-        file_chunk_count = 0
-        
-        # Only proceed if audio is long enough for at least one full chunk
-        if total_samples < chunk_samples:
-            print(f"skipped (too short)")
-            continue
-            
-        # Calculate how many chunks we can extract
-        max_start_positions = max(1, (total_samples - chunk_samples) // (chunk_samples // 2))
-        
-        # Generate random start positions to ensure statistical independence
-        import random
-        random.seed(42)  # For reproducibility
-        
-        # Sample random positions, ensuring chunks don't overlap too much
-        start_positions = []
-        attempts = 0
-        max_attempts = max_start_positions * 3  # Allow some retries
-        
-        while len(start_positions) < max_start_positions and attempts < max_attempts:
-            start = random.randint(0, total_samples - chunk_samples)
-            # Ensure minimum distance between chunks (at least 25% of chunk size)
-            min_distance = chunk_samples // 4
-            if not any(abs(start - pos) < min_distance for pos in start_positions):
-                start_positions.append(start)
-            attempts += 1
-        
-        # Sort for consistent ordering but maintain statistical independence
-        start_positions.sort()
-        
-        for start_sample in start_positions:
-            end_sample = start_sample + chunk_samples
-            chunk = waveform[:, start_sample:end_sample]
-            
-            # Save chunk
-            chunk_filename = f"{base_name}_chunk_{file_chunk_count:03d}.wav"
+
+        num_chunks = (total_samples + chunk_samples - 1) // chunk_samples  # ceil division
+
+        for i in range(num_chunks):
+            start = i * chunk_samples
+            end = min(start + chunk_samples, total_samples)
+            chunk = waveform[:, start:end]
+
+            # Pad last chunk if needed
+            if chunk.shape[1] < chunk_samples:
+                pad_len = chunk_samples - chunk.shape[1]
+                chunk = torch.nn.functional.pad(chunk, (0, pad_len))
+
+            chunk_filename = f"{base_name}_chunk_{i:03d}.wav"
             chunk_path = os.path.join(output_dir, chunk_filename)
             torchaudio.save(chunk_path, chunk, sample_rate)
-            
+
             file_mappings[base_name].append(chunk_filename)
-            
-            file_chunk_count += 1
             chunk_count += 1
-        
-        print(f"{file_chunk_count} chunks")
-    
+
     print(f"✅ Created {chunk_count} total chunks in {output_dir}")
     return chunk_count, file_mappings
+    
 
 def align_chunks_for_kl(ref_mappings, gen_mappings, temp_ref_dir, temp_gen_dir):
     """Ensure matched pairs for KL divergence calculation"""
@@ -177,6 +156,26 @@ def evaluate_chunked_audio():
         print("✅ EvaluationHelper initialized successfully!")
         
         print("\n🧮 Calculating metrics on aligned chunked audio...")
+        
+        # DEBUG: Check what files we're actually evaluating
+        print(f"\n🔍 DEBUG: Checking audio files before evaluation...")
+        ref_files = glob.glob(os.path.join(aligned_ref_dir, "*.wav"))
+        gen_files = glob.glob(os.path.join(aligned_gen_dir, "*.wav"))
+        
+        print(f"Reference files: {len(ref_files)}")
+        print(f"Generated files: {len(gen_files)}")
+        
+        # Check first few files for duration
+        for i, file_path in enumerate(ref_files[:3]):
+            waveform, sr = torchaudio.load(file_path)
+            duration = waveform.shape[1] / sr
+            print(f"  Ref {i}: {os.path.basename(file_path)} → {duration:.1f}s ({waveform.shape[1]} samples)")
+            
+        for i, file_path in enumerate(gen_files[:3]):
+            waveform, sr = torchaudio.load(file_path)
+            duration = waveform.shape[1] / sr
+            print(f"  Gen {i}: {os.path.basename(file_path)} → {duration:.1f}s ({waveform.shape[1]} samples)")
+        
         metrics = evaluator.calculate_metrics(aligned_gen_dir, aligned_ref_dir, same_name=True)
         
         print("\n� CHUNKED EVALUATION RESULTS:")

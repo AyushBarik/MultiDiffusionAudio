@@ -7,7 +7,7 @@
 *.m4a
 
 # Virtual environments
-benchenv/
+testenv/
 ldmenv/
 venv/
 env/
@@ -95,3 +95,4 @@ logs/
 tmp/
 temp/
 .tmp/
+chunked_ref/

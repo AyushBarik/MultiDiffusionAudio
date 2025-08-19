@@ -39,7 +39,7 @@ def initialize_models():
     print("  - Loading CLAP model...")
     clap_model = laion_clap.CLAP_Module(enable_fusion=False, amodel='HTSAT-base')
     
-    clap_ckpt = 'CLAP90.14.pt'
+    clap_ckpt = os.path.expanduser('~/.cache/torch/hub/checkpoints/music_audioset_epoch_15_esc_90.14.pt')
     if os.path.exists(clap_ckpt):
         clap_model.load_ckpt(ckpt=clap_ckpt)
         print(f"    ✅ Loaded CLAP checkpoint: {clap_ckpt}")
