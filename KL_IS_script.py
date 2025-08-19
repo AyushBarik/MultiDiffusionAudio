@@ -3,7 +3,7 @@ import torch
 from audioldm_eval import EvaluationHelper
 
 REF_DIR = "chunked_ref"
-GEN_DIR = "artifacts/val/novel/config_8"
+GEN_DIR = "artifacts/val/novel/config_9"
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
